@@ -1,0 +1,49 @@
+[project]
+name = "ensync-simple"
+version = "0.0.1"
+description = "Simple Browser port for qtpy"
+authors = [
+    { name = "Sean Champ", email = "spchamp@users.noreply.github.com" },
+]
+classifiers = [
+    'Intended Audience :: Developers',
+    'License :: OSI Approved :: MIT License',
+    "Private :: Do not Upload",
+]
+requires-python = ">=3.10"
+readme = "README.md"
+license = { text = "MIT" }
+
+dependencies = [
+    "qtpy"
+]
+
+[project.optional-dependencies]
+pyqt5 = ["pyqt5", "PyQtWebEngine"]
+pyqt6 = ["pyqt6", "PyQt6-WebEngine"]
+pyside2 = ["pyside2"]
+pyside6 = ['pyside6']
+qt-all = ["ensync-simple[pyqt5,pyqt6,pyside2,pyside6]"]
+dev = [
+    "ipython",
+    "pdm-backend",
+    "pdm",
+    "pytest >= 7.2.1",
+    "pytest-asyncio",
+    "pytest-dependency",
+    "python-dotenv",
+    "ensync-simple[pyqt6]",
+]
+
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["ensync", "simplebrowser"]
+
+
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.pdm]
+distribution = true
