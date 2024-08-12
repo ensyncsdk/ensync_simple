@@ -1,21 +1,29 @@
 # Copyright (C) 2023 The Qt Company Ltd.
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
-import sys
 from warnings import warn
 
 import typing as t
 
 from qtpy.QtWebEngineCore import QWebEnginePage
 from qtpy.QtWidgets import (QMainWindow, QFileDialog,
-                               QInputDialog, QLineEdit, QMenu, QMessageBox,
-                               QProgressBar, QToolBar, QVBoxLayout, QWidget,
-                               QApplication)
+                            QInputDialog, QLineEdit, QMenu, QMessageBox,
+                            QProgressBar, QToolBar, QVBoxLayout, QWidget,
+                            QApplication)
 from qtpy.QtGui import QAction, QGuiApplication, QIcon, QKeySequence
-from qtpy.QtCore import QUrl, Qt, Slot, Signal
+from qtpy.QtCore import QObject, QUrl, Qt, Slot, Signal
+
+from qtpy.QtWebEngineCore import (
+    QWebEngineProfile
+)
 
 from ensync.simple.util import SimpleWarning
 from ensync.simple.tabwidget import TabWidget
+
+if t.TYPE_CHECKING:
+    from ensync.simple.browser import Browser
+else:
+    Browser: t.TypeAlias = QObject
 
 
 def remove_backspace(keys):
@@ -28,90 +36,263 @@ def remove_backspace(keys):
     return result
 
 
-class BrowserWindow(QMainWindow):
+class BaseBrowserWindow(QMainWindow):
     if t.TYPE_CHECKING:
+        _browser: Browser
         _view_menu: QMenu
+        _tab_widget: TabWidget
+        _last_search: str
 
     about_to_close = Signal()
 
-    def __init__(self, browser, profile, forDevTools):
+    def __init__(self, browser: Browser, profile: QWebEngineProfile):
         super().__init__()
 
-        self._progress_bar = None
-        self._history_back_action = None
-        self._history_forward_action = None
-        self._stop_action = None
-        self._reload_action = None
-        self._stop_reload_action = None
-        self._url_line_edit = None
-        self._fav_action = None
         self._last_search = ""
-        self._toolbar = None
 
         self._browser = browser
         self._profile = profile
-        self._tab_widget = TabWidget(profile, self)
+        tab_widget = TabWidget(profile, self)
+        tab_widget.title_changed.connect(
+            self.handle_web_view_title_changed)
+        tab_widget.create_tab()
+        tab_widget.link_hovered.connect(self._show_status_message)
+        self._tab_widget = tab_widget
+
+        self.setAttribute(Qt.WA_DeleteOnClose, True)
+        self.setFocusPolicy(Qt.ClickFocus)
+
+        central_widget = QWidget(self)
+        layout = QVBoxLayout(central_widget)
+        layout.setSpacing(0)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.addWidget(tab_widget)
+        central_widget.setLayout(layout)
+        self.setCentralWidget(central_widget)
+
+        self.handle_web_view_title_changed()
+
+    @Slot(str)
+    def _show_status_message(self, m):
+        self.statusBar().showMessage(m)
+
+    @Slot()
+    def _close_current_tab(self):
+        self._tab_widget.close_tab(self._tab_widget.currentIndex())
+
+    @Slot()
+    def _find_next(self):
+        tab = self.current_tab()
+        if tab and self._last_search:
+            tab.findText(self._last_search)
+
+    @Slot()
+    def _find_previous(self):
+        tab = self.current_tab()
+        if tab and self._last_search:
+            tab.findText(self._last_search, QWebEnginePage.FindBackward)
+
+    @Slot()
+    def _stop(self):
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.Stop)
+
+    @Slot()
+    def _reload(self):
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.Reload)
+
+    @Slot()
+    def _stop_reload(self):
+        a = self._stop_reload_action.data()
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.WebAction(a))
+
+    @Slot()
+    def _back(self):
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.Back)
+
+    @Slot()
+    def _forward(self):
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.Forward)
+
+    @Slot()
+    def _zoom_in(self):
+        tab = self.current_tab()
+        if tab:
+            tab.setZoomFactor(tab.zoomFactor() + 0.1)
+
+    @Slot()
+    def _zoom_out(self):
+        tab = self.current_tab()
+        if tab:
+            tab.setZoomFactor(tab.zoomFactor() - 0.1)
+
+    @Slot()
+    def _reset_zoom(self):
+        tab = self.current_tab()
+        if tab:
+            tab.setZoomFactor(1)
+
+    def sizeHint(self):
+        desktop_rect = QGuiApplication.primaryScreen().geometry()
+        return desktop_rect.size() * 0.9
+
+    def handle_web_view_title_changed(self, title: t.Optional[str] = None):
+        otr = self._profile.isOffTheRecord()
+        suffix = ("Simple (Incognito)" if otr else "Simple")
+        if title:
+            self.setWindowTitle(" - ".join((title, suffix)))
+        else:
+            self.setWindowTitle(suffix)
+
+    def handle_new_window_triggered(self):
+        window = self._browser.create_window()
+        window._url_line_edit.setFocus()
+
+    def handle_new_incognito_window_triggered(self):
+        window = self._browser.create_window(True)
+        window._url_line_edit.setFocus()
+
+    def handle_file_open_triggered(self):
+        filter = "Web Resources (*.html *.htm *.svg *.png *.gif *.svgz);;All files (*.*)"
+        url, _ = QFileDialog.getOpenFileUrl(
+            self, "Open Web Resource", "", filter)
+        if url:
+            self.current_tab().setUrl(url)
+
+    def handle_find_action_triggered(self):
+        if not self.current_tab():
+            return
+        search, ok = QInputDialog.getText(self, "Find", "Find:",
+                                          QLineEdit.Normal, self._last_search)
+        if ok and search:
+            self._last_search = search
+            self.current_tab().findText(self._last_search)
+
+    def closeEvent(self, event):
+        count = self._tab_widget.count()
+        if count > 1:
+            m = f"Are you sure you want to close the window?\nThere are {count} tabs open."
+            ret = QMessageBox.warning(self, "Confirm close", m,
+                                      QMessageBox.Yes | QMessageBox.No,
+                                      QMessageBox.No)
+            if ret == QMessageBox.No:
+                event.ignore()
+                return
+
+        event.accept()
+        self.about_to_close.emit()
+        self.deleteLater()
+
+    def tab_widget(self):
+        return self._tab_widget
+
+    def current_tab(self):
+        return self._tab_widget.current_web_view()
+
+    def handle_show_window_triggered(self):
+        action = self.sender()
+        if action:
+            offset = action.data()
+            window = self._browser.windows()[offset]
+            window.activateWindow()
+            window.current_tab().setFocus()
+
+    def handle_dev_tools_requested(self, source):
+        page = self._browser.create_dev_tools_window().current_tab().page()
+        source.setDevToolsPage(page)
+        source.triggerAction(QWebEnginePage.InspectElement)
+
+    def handle_find_text_finished(self, result):
+        sb = self.statusBar()
+        if result.numberOfMatches() == 0:
+            sb.showMessage(f'"{self._lastSearch}" not found.')
+        else:
+            active = result.activeMatch()
+            number = result.numberOfMatches()
+            sb.showMessage(f'"{self._last_search}" found: {active}/{number}')
+
+    def browser(self) -> Browser:
+        return self._browser
+
+
+class DevToolsWindow(BaseBrowserWindow):
+    pass
+
+
+class BrowserWindow(BaseBrowserWindow):
+    if t.TYPE_CHECKING:
+        _progress_bar: QProgressBar
+        _toolbar: QToolBar
+        #
+        # toolbar items
+        #
+        _stop_action: QAction
+        _history_back_action: QAction
+        _history_forward_action: QAction
+        _reload_action: QAction
+        _stop_reload_action: QAction
+        _fav_action: QAction
+        _url_line_edit: QLineEdit
+        _stop_icon: QIcon
+        _reload_icon: QIcon
+        #
+        # menubar items
+        #
+        _file_menu: QMenu
+        _edit_menu: QMenu
+        _view_menu: QMenu
+        _window_menu: QMenu
+        _help_menu: QMenu
+
+    def __init__(self, browser: Browser, profile: QWebEngineProfile):
+        super().__init__(browser, profile)
 
         self._stop_icon = QIcon.fromTheme(QIcon.ThemeIcon.ProcessStop,
                                           QIcon(":process-stop.png"))
         self._reload_icon = QIcon.fromTheme(QIcon.ThemeIcon.ViewRefresh,
                                             QIcon(":view-refresh.png"))
 
-        self.setAttribute(Qt.WA_DeleteOnClose, True)
-        self.setFocusPolicy(Qt.ClickFocus)
+        self._progress_bar = QProgressBar(self)
+        self._progress_bar.setMaximumHeight(1)
+        self._progress_bar.setTextVisible(False)
+        s = "QProgressBar {border: 0px} QProgressBar.chunk {background-color: #da4453}"
+        self._progress_bar.setStyleSheet(s)
 
-        if not forDevTools:
-            self._progress_bar = QProgressBar(self)
+        self._toolbar = self.create_tool_bar()
+        self.addToolBar(self._toolbar)
 
-            self._toolbar = self.create_tool_bar()
-            self.addToolBar(self._toolbar)
-            mb = self.menuBar()
-            mb.addMenu(self.create_file_menu(self._tab_widget))
-            mb.addMenu(self.create_edit_menu())
-            mb.addMenu(self.create_view_menu())
-            mb.addMenu(self.create_window_menu(self._tab_widget))
-            mb.addMenu(self.create_help_menu())
+        mb = self.menuBar()
+        mb.addMenu(self.create_file_menu(self._tab_widget))
+        mb.addMenu(self.create_edit_menu())
+        mb.addMenu(self.create_view_menu())
+        mb.addMenu(self.create_window_menu(self._tab_widget))
+        mb.addMenu(self.create_help_menu())
 
-        central_widget = QWidget(self)
-        layout = QVBoxLayout(central_widget)
-        layout.setSpacing(0)
-        layout.setContentsMargins(0, 0, 0, 0)
-        if not forDevTools:
-            self.addToolBarBreak()
+        self.addToolBarBreak()
 
-            self._progress_bar.setMaximumHeight(1)
-            self._progress_bar.setTextVisible(False)
-            s = "QProgressBar {border: 0px} QProgressBar.chunk {background-color: #da4453}"
-            self._progress_bar.setStyleSheet(s)
+        self._tab_widget.load_progress.connect(
+            self.handle_web_view_load_progress)
+        self._tab_widget.web_action_enabled_changed.connect(
+            self.handle_web_action_enabled_changed)
+        self._tab_widget.url_changed.connect(
+            self._url_changed)
+        self._tab_widget.fav_icon_changed.connect(
+            self._fav_action.setIcon)
+        self._tab_widget.dev_tools_requested.connect(
+            self.handle_dev_tools_requested)
+        self._url_line_edit.returnPressed.connect(
+            self._address_return_pressed)
+        self._tab_widget.find_text_finished.connect(
+            self.handle_find_text_finished)
 
-            layout.addWidget(self._progress_bar)
+        focus_url_line_edit_action = QAction(self)
+        self.addAction(focus_url_line_edit_action)
+        focus_url_line_edit_action.setShortcut(
+            QKeySequence(Qt.CTRL | Qt.Key_L))
+        focus_url_line_edit_action.triggered.connect(
+            self._focus_url_lineEdit)
 
-        layout.addWidget(self._tab_widget)
-        self.setCentralWidget(central_widget)
-
-        self._tab_widget.title_changed.connect(self.handle_web_view_title_changed)
-        if not forDevTools:
-            self._tab_widget.link_hovered.connect(self._show_status_message)
-            self._tab_widget.load_progress.connect(self.handle_web_view_load_progress)
-            self._tab_widget.web_action_enabled_changed.connect(
-                self.handle_web_action_enabled_changed)
-            self._tab_widget.url_changed.connect(self._url_changed)
-            self._tab_widget.fav_icon_changed.connect(self._fav_action.setIcon)
-            self._tab_widget.dev_tools_requested.connect(self.handle_dev_tools_requested)
-            self._url_line_edit.returnPressed.connect(self._address_return_pressed)
-            self._tab_widget.find_text_finished.connect(self.handle_find_text_finished)
-
-            focus_url_line_edit_action = QAction(self)
-            self.addAction(focus_url_line_edit_action)
-            focus_url_line_edit_action.setShortcut(QKeySequence(Qt.CTRL | Qt.Key_L))
-            focus_url_line_edit_action.triggered.connect(self._focus_url_lineEdit)
-
-        self.handle_web_view_title_changed("")
-        self._tab_widget.create_tab()
-
-    @Slot(str)
-    def _show_status_message(self, m):
-        self.statusBar().showMessage(m)
+        layout = self.centralWidget().layout()
+        layout.addWidget(self._progress_bar)
 
     @Slot(QUrl)
     def _url_changed(self, url):
@@ -132,20 +313,38 @@ class BrowserWindow(QMainWindow):
         self._url_line_edit.setFocus()
 
     @Slot()
-    def _close_current_tab(self):
-        self._tab_widget.close_tab(self._tab_widget.currentIndex())
-
-    @Slot()
     def _update_close_action_text(self):
         last_win = len(self._browser.windows()) == 1
         self._close_action.setText("Quit" if last_win else "Close Window")
 
-    def sizeHint(self):
-        desktop_rect = QGuiApplication.primaryScreen().geometry()
-        return desktop_rect.size() * 0.9
+    @Slot()
+    def _toggle_toolbar(self):
+        if self._toolbar.isVisible():
+            self._view_toolbar_action.setText("Show Toolbar")
+            self._toolbar.close()
+        else:
+            self._view_toolbar_action.setText("Hide Toolbar")
+            self._toolbar.show()
+
+    @Slot()
+    def _toggle_statusbar(self):
+        sb = self.statusBar()
+        if sb.isVisible():
+            self._view_statusbar_action.setText("Show Status Bar")
+            sb.close()
+        else:
+            self._view_statusbar_action.setText("Hide Status Bar")
+            sb.show()
+
+    @Slot()
+    def _emit_dev_tools_requested(self):
+        tab = self.current_tab()
+        if tab:
+            tab.dev_tools_requested.emit(tab.page())
 
     def create_file_menu(self, tabWidget):
         file_menu = QMenu("File")
+        self._file_menu = file_menu
         file_menu.addAction("&New Window", QKeySequence.New,
                             self.handle_new_window_triggered)
         file_menu.addAction("New &Incognito Window",
@@ -173,20 +372,9 @@ class BrowserWindow(QMainWindow):
         file_menu.aboutToShow.connect(self._update_close_action_text)
         return file_menu
 
-    @Slot()
-    def _find_next(self):
-        tab = self.current_tab()
-        if tab and self._last_search:
-            tab.findText(self._last_search)
-
-    @Slot()
-    def _find_previous(self):
-        tab = self.current_tab()
-        if tab and self._last_search:
-            tab.findText(self._last_search, QWebEnginePage.FindBackward)
-
     def create_edit_menu(self):
         edit_menu = QMenu("Edit")
+        self._edit_menu = edit_menu
         find_action = edit_menu.addAction("Find")
         find_action.setShortcuts(QKeySequence.Find)
         find_action.triggered.connect(self.handle_find_action_triggered)
@@ -199,51 +387,6 @@ class BrowserWindow(QMainWindow):
         find_previous_action.setShortcut(QKeySequence.FindPrevious)
         find_previous_action.triggered.connect(self._find_previous)
         return edit_menu
-
-    @Slot()
-    def _stop(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Stop)
-
-    @Slot()
-    def _reload(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Reload)
-
-    @Slot()
-    def _zoom_in(self):
-        tab = self.current_tab()
-        if tab:
-            tab.setZoomFactor(tab.zoomFactor() + 0.1)
-
-    @Slot()
-    def _zoom_out(self):
-        tab = self.current_tab()
-        if tab:
-            tab.setZoomFactor(tab.zoomFactor() - 0.1)
-
-    @Slot()
-    def _reset_zoom(self):
-        tab = self.current_tab()
-        if tab:
-            tab.setZoomFactor(1)
-
-    @Slot()
-    def _toggle_toolbar(self):
-        if self._toolbar.isVisible():
-            self._view_toolbar_action.setText("Show Toolbar")
-            self._toolbar.close()
-        else:
-            self._view_toolbar_action.setText("Hide Toolbar")
-            self._toolbar.show()
-
-    @Slot()
-    def _toggle_statusbar(self):
-        sb = self.statusBar()
-        if sb.isVisible():
-            self._view_statusbar_action.setText("Show Status Bar")
-            sb.close()
-        else:
-            self._view_statusbar_action.setText("Hide Status Bar")
-            sb.show()
 
     def create_view_menu(self):
         view_menu = QMenu("View")
@@ -283,12 +426,6 @@ class BrowserWindow(QMainWindow):
         view_menu.addAction(self._view_statusbar_action)
         return view_menu
 
-    @Slot()
-    def _emit_dev_tools_requested(self):
-        tab = self.current_tab()
-        if tab:
-            tab.dev_tools_requested.emit(tab.page())
-
     def create_window_menu(self, tabWidget):
         menu = QMenu("Window")
         self._next_tab_action = QAction("Show Next Tab", self)
@@ -313,7 +450,8 @@ class BrowserWindow(QMainWindow):
         shortcuts.clear()
         shortcuts.append(QKeySequence(Qt.CTRL | Qt.SHIFT | Qt.Key_I))
         self._inspector_action.setShortcuts(shortcuts)
-        self._inspector_action.triggered.connect(self._emit_dev_tools_requested)
+        self._inspector_action.triggered.connect(
+            self._emit_dev_tools_requested)
         self._window_menu = menu
         menu.aboutToShow.connect(self._populate_window_menu)
         return menu
@@ -326,10 +464,9 @@ class BrowserWindow(QMainWindow):
         menu.addSeparator()
         menu.addAction(self._inspector_action)
         menu.addSeparator()
-        windows = self._browser.windows()
         index = 0
         title = self.window().windowTitle()
-        for window in windows:
+        for window in self._browser.each_window():
             action = menu.addAction(title, self.handle_show_window_triggered)
             action.setData(index)
             action.setCheckable(True)
@@ -339,21 +476,9 @@ class BrowserWindow(QMainWindow):
 
     def create_help_menu(self):
         help_menu = QMenu("Help")
+        self._help_menu = help_menu
         help_menu.addAction("About Qt", QApplication.aboutQt)
         return help_menu
-
-    @Slot()
-    def _back(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Back)
-
-    @Slot()
-    def _forward(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Forward)
-
-    @Slot()
-    def _stop_reload(self):
-        a = self._stop_reload_action.data()
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.WebAction(a))
 
     def create_tool_bar(self):
         navigation_bar = QToolBar("Navigation")
@@ -361,7 +486,8 @@ class BrowserWindow(QMainWindow):
         navigation_bar.toggleViewAction().setEnabled(False)
 
         self._history_back_action = QAction(self)
-        back_shortcuts = remove_backspace(QKeySequence.keyBindings(QKeySequence.Back))
+        back_shortcuts = remove_backspace(
+            QKeySequence.keyBindings(QKeySequence.Back))
 
         # For some reason Qt doesn't bind the dedicated Back key to Back.
         back_shortcuts.append(QKeySequence(Qt.Key_Back))
@@ -375,7 +501,8 @@ class BrowserWindow(QMainWindow):
         navigation_bar.addAction(self._history_back_action)
 
         self._history_forward_action = QAction(self)
-        fwd_shortcuts = remove_backspace(QKeySequence.keyBindings(QKeySequence.Forward))
+        fwd_shortcuts = remove_backspace(
+            QKeySequence.keyBindings(QKeySequence.Forward))
         fwd_shortcuts.append(QKeySequence(Qt.Key_Forward))
         self._history_forward_action.setShortcuts(fwd_shortcuts)
         self._history_forward_action.setIconVisibleInMenu(False)
@@ -392,7 +519,8 @@ class BrowserWindow(QMainWindow):
 
         self._url_line_edit = QLineEdit(self)
         self._fav_action = QAction(self)
-        self._url_line_edit.addAction(self._fav_action, QLineEdit.LeadingPosition)
+        self._url_line_edit.addAction(
+            self._fav_action, QLineEdit.LeadingPosition)
         self._url_line_edit.setClearButtonEnabled(True)
         navigation_bar.addWidget(self._url_line_edit)
 
@@ -415,94 +543,18 @@ class BrowserWindow(QMainWindow):
         elif action == QWebEnginePage.WebAction.Stop:
             self._stop_action.setEnabled(enabled)
         else:
-            warn(SimpleWarning("Unhandled webActionChanged signal", action, enabled), stacklevel=2)
-
-    def handle_web_view_title_changed(self, title):
-        off_the_record = self._profile.isOffTheRecord()
-        suffix = ("Qt Simple Browser (Incognito)" if off_the_record
-                  else "Qt Simple Browser")
-        if title:
-            self.setWindowTitle(f"{title} - {suffix}")
-        else:
-            self.setWindowTitle(suffix)
-
-    def handle_new_window_triggered(self):
-        window = self._browser.create_window()
-        window._url_line_edit.setFocus()
-
-    def handle_new_incognito_window_triggered(self):
-        window = self._browser.create_window(True)
-        window._url_line_edit.setFocus()
-
-    def handle_file_open_triggered(self):
-        filter = "Web Resources (*.html *.htm *.svg *.png *.gif *.svgz);;All files (*.*)"
-        url, _ = QFileDialog.getOpenFileUrl(self, "Open Web Resource", "", filter)
-        if url:
-            self.current_tab().setUrl(url)
-
-    def handle_find_action_triggered(self):
-        if not self.current_tab():
-            return
-        search, ok = QInputDialog.getText(self, "Find", "Find:",
-                                          QLineEdit.Normal, self._last_search)
-        if ok and search:
-            self._last_search = search
-            self.current_tab().findText(self._last_search)
-
-    def closeEvent(self, event):
-        count = self._tab_widget.count()
-        if count > 1:
-            m = f"Are you sure you want to close the window?\nThere are {count} tabs open."
-            ret = QMessageBox.warning(self, "Confirm close", m,
-                                      QMessageBox.Yes | QMessageBox.No,
-                                      QMessageBox.No)
-            if ret == QMessageBox.No:
-                event.ignore()
-                return
-
-        event.accept()
-        self.about_to_close.emit()
-        self.deleteLater()
-
-    def tab_widget(self):
-        return self._tab_widget
-
-    def current_tab(self):
-        return self._tab_widget.current_web_view()
+            warn(SimpleWarning("Unhandled webActionChanged signal",
+                 action, enabled), stacklevel=2)
 
     def handle_web_view_load_progress(self, progress):
         if 0 < progress and progress < 100:
             self._stop_reload_action.setData(QWebEnginePage.WebAction.Stop)
             self._stop_reload_action.setIcon(self._stop_icon)
-            self._stop_reload_action.setToolTip("Stop loading the current page")
+            self._stop_reload_action.setToolTip(
+                "Stop loading the current page")
             self._progress_bar.setValue(progress)
         else:
             self._stop_reload_action.setData(QWebEnginePage.WebAction.Reload)
             self._stop_reload_action.setIcon(self._reload_icon)
             self._stop_reload_action.setToolTip("Reload the current page")
             self._progress_bar.setValue(0)
-
-    def handle_show_window_triggered(self):
-        action = self.sender()
-        if action:
-            offset = action.data()
-            window = self._browser.windows()[offset]
-            window.activateWindow()
-            window.current_tab().setFocus()
-
-    def handle_dev_tools_requested(self, source):
-        page = self._browser.create_dev_tools_window().current_tab().page()
-        source.setDevToolsPage(page)
-        source.triggerAction(QWebEnginePage.InspectElement)
-
-    def handle_find_text_finished(self, result):
-        sb = self.statusBar()
-        if result.numberOfMatches() == 0:
-            sb.showMessage(f'"{self._lastSearch}" not found.')
-        else:
-            active = result.activeMatch()
-            number = result.numberOfMatches()
-            sb.showMessage(f'"{self._last_search}" found: {active}/{number}')
-
-    def browser(self):
-        return self._browser
