@@ -39,8 +39,8 @@ if __name__ == "__main__":
     browser = Browser()
     window = browser.create_hidden_window()
 
-    url = QUrl.fromUserInput(args.url) if args.url else QUrl("https://www.qt.io")
-    window.tab_widget().set_url(url)
+    # url = QUrl.fromUserInput(args.url) if args.url else QUrl("https://www.qt.io")
+    # window.tab_widget().set_url(url)
     window.show()
     try:
         rc = app.exec()
