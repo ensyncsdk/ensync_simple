@@ -40,6 +40,11 @@ class Browser(QObject):
         dp.downloadRequested.connect(
             self._download_manager_widget.download_requested)
 
+    def configure_profile(self, profile: QWebEngineProfile, options: dict[QWebEngineSettings.WebAttribute, bool]):
+        settings = profile.settings()
+        for attr, state in options.items():
+            settings.setAttribute(attr, state)
+
     def get_profile(self, private: bool = False) -> QWebEngineProfile:
         if private:
             return QWebEngineProfile.defaultProfile()
@@ -53,15 +58,13 @@ class Browser(QObject):
             name = ".".join((QCoreApplication.instance().applicationName(),
                             qWebEngineChromiumVersion()))
             profile = QWebEngineProfile(name)
-            s = profile.settings()
-            s.setAttribute(
-                QWebEngineSettings.WebAttribute.PluginsEnabled, True)
-            s.setAttribute(
-                QWebEngineSettings.WebAttribute.DnsPrefetchEnabled, True)
-            s.setAttribute(
-                QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
-            s.setAttribute(
-                QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls, False)
+            self.configure_profile(profile, {
+                QWebEngineSettings.WebAttribute.PluginsEnabled: True,
+                QWebEngineSettings.WebAttribute.DnsPrefetchEnabled: True,
+                QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls: True,
+                QWebEngineSettings.WebAttribute.LocalContentCanAccessFileUrls: False,
+                QWebEngineSettings.WebAttribute.FullScreenSupportEnabled: True,
+            })
             profile.downloadRequested.connect(
                 self._download_manager_widget.download_requested)
             self._profile = profile

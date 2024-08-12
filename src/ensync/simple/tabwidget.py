@@ -72,10 +72,10 @@ class TabWidget(QTabWidget):
             self.load_progress.emit(0)
             self.url_changed.emit(QUrl())
             self.fav_icon_changed.emit(QIcon())
-            self.web_action_enabled_changed.emit(QWebEnginePage.Back, False)
-            self.web_action_enabled_changed.emit(QWebEnginePage.Forward, False)
-            self.web_action_enabled_changed.emit(QWebEnginePage.Stop, False)
-            self.web_action_enabled_changed.emit(QWebEnginePage.Reload, True)
+            self.web_action_enabled_changed.emit(QWebEnginePage.WebAction.Back, False)
+            self.web_action_enabled_changed.emit(QWebEnginePage.WebAction.Forward, False)
+            self.web_action_enabled_changed.emit(QWebEnginePage.WebAction.Stop, False)
+            self.web_action_enabled_changed.emit(QWebEnginePage.WebAction.Reload, True)
 
     def handle_context_menu_requested(self, pos):
         menu = QMenu()

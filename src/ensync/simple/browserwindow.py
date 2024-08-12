@@ -192,7 +192,7 @@ class BaseBrowserWindow(QMainWindow):
         action = self.sender()
         if action:
             offset = action.data()
-            window = self._browser.windows()[offset]
+            window = tuple(self._browser.each_window())[offset]
             window.activateWindow()
             window.current_tab().setFocus()
 
@@ -314,7 +314,9 @@ class BrowserWindow(BaseBrowserWindow):
 
     @Slot()
     def _update_close_action_text(self):
-        last_win = len(self._browser.windows()) == 1
+        last_win = None
+        for w in self._browser.each_window():
+            last_win = w
         self._close_action.setText("Quit" if last_win else "Close Window")
 
     @Slot()
