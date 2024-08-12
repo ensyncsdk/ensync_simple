@@ -35,6 +35,9 @@ dev = [
     "ensync-simple[pyqt6]",
 ]
 
+[project.gui-scripts]
+simpleweb = "ensync.simple.main:run_main"
+
 [tool.setuptools.packages.find]
 where = ["src"]
 include = ["ensync"]

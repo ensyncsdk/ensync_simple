@@ -3,20 +3,38 @@
 
 """PySide6 port of the Qt WebEngineWidgets Simple Browser example from Qt v6.x"""
 
+import os
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
+from importlib.util import find_spec
 import traceback
 
-from qtpy.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
-from qtpy.QtWidgets import QApplication, QErrorMessage
-from qtpy.QtGui import QIcon
-from qtpy.QtCore import QCoreApplication, QLoggingCategory, QUrl
 
-from ensync.simple.browser import Browser
+def ensure_qt_api():
+    qt_api = None
+    try:
+        qt_api = os.environ["QT_API"]
+    except KeyError:
+        spec = find_spec("PySide6")
+        if spec is None:
+            spec = find_spec("PyQt6")
+        if spec is not None:
+            qt_api = spec.name
+            os.environ["QT_API"] = qt_api
 
-import ensync.simple.data.rc_simplebrowser as rc_simplebrowser  # noqa: F401
 
-if __name__ == "__main__":
+def run_main():
+    ensure_qt_api()
+
+    from ensync.simple.browser import Browser
+
+    import ensync.simple.data.rc_simplebrowser as rc_simplebrowser  # noqa: F401
+
+    from qtpy.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
+    from qtpy.QtWidgets import QApplication, QErrorMessage
+    from qtpy.QtGui import QIcon
+    from qtpy.QtCore import QCoreApplication, QLoggingCategory, QUrl
+
     parser = ArgumentParser(description="Qt Widgets Web Browser",
                             formatter_class=RawTextHelpFormatter)
     parser.add_argument("--single-process", "-s", action="store_true",
@@ -50,5 +68,10 @@ if __name__ == "__main__":
         rc = app.exec()
     except BaseException:
         rc = 1
-        traceback.print_exception(*sys.exc_info())
+        traceback.print_exception(*sys.exc_info(), file=sys.stderr)
+        app.exit(rc)
     sys.exit(rc)
+
+
+if __name__ == "__main__":
+    run_main()
