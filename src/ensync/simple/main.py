@@ -7,7 +7,7 @@ import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
 
 from qtpy.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
-from qtpy.QtWidgets import QApplication
+from qtpy.QtWidgets import QApplication, QErrorMessage
 from qtpy.QtGui import QIcon
 from qtpy.QtCore import QCoreApplication, QLoggingCategory, QUrl
 
@@ -23,7 +23,8 @@ if __name__ == "__main__":
     parser.add_argument("url", type=str, nargs="?", help="URL")
     args = parser.parse_args()
 
-    QCoreApplication.setOrganizationName("QtExamples")
+    QCoreApplication.setOrganizationName("ensync")
+    QCoreApplication.setApplicationName("simple")
 
     app_args = sys.argv
     if args.single_process:
@@ -31,6 +32,7 @@ if __name__ == "__main__":
     app = QApplication(app_args)
     app.setWindowIcon(QIcon(":AppLogoColor.png"))
     QLoggingCategory.setFilterRules("qt.webenginecontext.debug=true")
+    error_message = QErrorMessage.qtHandler()
 
     s = QWebEngineProfile.defaultProfile().settings()
     s.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, True)

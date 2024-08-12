@@ -3,7 +3,7 @@
 
 import sys
 
-from typing import cast
+import typing as t
 
 from qtpy.QtWebEngineCore import QWebEnginePage
 from qtpy.QtWidgets import (QMainWindow, QFileDialog,
@@ -27,6 +27,8 @@ def remove_backspace(keys):
 
 
 class BrowserWindow(QMainWindow):
+    if t.TYPE_CHECKING:
+        _view_menu: QMenu
 
     about_to_close = Signal()
 
@@ -243,6 +245,7 @@ class BrowserWindow(QMainWindow):
 
     def create_view_menu(self):
         view_menu = QMenu("View")
+        self._view_menu = view_menu
         self._stop_action = view_menu.addAction("Stop")
         shortcuts = []
         shortcuts.append(QKeySequence(Qt.CTRL | Qt.Key_Period))
