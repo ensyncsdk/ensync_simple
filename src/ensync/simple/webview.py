@@ -3,12 +3,14 @@
 
 from functools import partial
 
+import typing as t
+
 from qtpy.QtWebEngineCore import (QWebEngineFileSystemAccessRequest,
-                                     QWebEnginePage)
+                                  QWebEnginePage)
 from qtpy.QtWebEngineWidgets import QWebEngineView
 
-from qtpy.QtWidgets import QDialog, QMessageBox, QStyle
-from qtpy.QtGui import QIcon
+from qtpy.QtWidgets import QDialog, QMessageBox, QStyle, QMenu, QWidget
+from qtpy.QtGui import QIcon, QContextMenuEvent
 from qtpy.QtNetwork import QAuthenticator
 from qtpy.QtCore import QTimer, Signal, Slot
 
@@ -44,7 +46,10 @@ class WebView(QWebEngineView):
     fav_icon_changed = Signal(QIcon)
     dev_tools_requested = Signal(QWebEnginePage)
 
-    def __init__(self, parent=None):
+    if t.TYPE_CHECKING:
+        _context_menu: QMenu
+
+    def __init__(self, parent: t.Optional[QWidget] = None):
         super().__init__(parent)
 
         self._load_progress = 100
@@ -94,30 +99,43 @@ class WebView(QWebEngineView):
         if btn == QMessageBox.Yes:
             QTimer.singleShot(0, self.reload)
 
+    @Slot()
+    def _emit_devtools_requested(self):
+        self.dev_tools_requested.emit(self.page())
+
     def set_page(self, page):
         old_page = self.page()
         if old_page and isinstance(old_page, WebPage):
-            old_page.createCertificateErrorDialog.disconnect(self.handle_certificate_error)
-            old_page.authenticationRequired.disconnect(self.handle_authentication_required)
-            old_page.featurePermissionRequested.disconnect(self.handle_feature_permission_requested)
+            old_page.createCertificateErrorDialog.disconnect(
+                self.handle_certificate_error)
+            old_page.authenticationRequired.disconnect(
+                self.handle_authentication_required)
+            old_page.featurePermissionRequested.disconnect(
+                self.handle_feature_permission_requested)
             old_page.proxyAuthenticationRequired.disconnect(
                 self.handle_proxy_authentication_required)
             old_page.registerProtocolHandlerRequested.disconnect(
                 self.handle_register_protocol_handler_requested)
-            old_page.fileSystemAccessRequested.disconnect(self.handle_file_system_access_requested)
+            old_page.fileSystemAccessRequested.disconnect(
+                self.handle_file_system_access_requested)
 
         self.create_web_action_trigger(page, QWebEnginePage.WebAction.Forward)
         self.create_web_action_trigger(page, QWebEnginePage.WebAction.Back)
         self.create_web_action_trigger(page, QWebEnginePage.WebAction.Reload)
         self.create_web_action_trigger(page, QWebEnginePage.WebAction.Stop)
         super().setPage(page)
-        page.create_certificate_error_dialog.connect(self.handle_certificate_error)
-        page.authenticationRequired.connect(self.handle_authentication_required)
-        page.featurePermissionRequested.connect(self.handle_feature_permission_requested)
-        page.proxyAuthenticationRequired.connect(self.handle_proxy_authentication_required)
+        page.create_certificate_error_dialog.connect(
+            self.handle_certificate_error)
+        page.authenticationRequired.connect(
+            self.handle_authentication_required)
+        page.featurePermissionRequested.connect(
+            self.handle_feature_permission_requested)
+        page.proxyAuthenticationRequired.connect(
+            self.handle_proxy_authentication_required)
         page.registerProtocolHandlerRequested.connect(
             self.handle_register_protocol_handler_requested)
-        page.fileSystemAccessRequested.connect(self.handle_file_system_access_requested)
+        page.fileSystemAccessRequested.connect(
+            self.handle_file_system_access_requested)
 
     def load_progress(self):
         return self._load_progress
@@ -127,7 +145,8 @@ class WebView(QWebEngineView):
 
     def create_web_action_trigger(self, page, webAction):
         action = page.action(webAction)
-        action.changed.connect(partial(self._emit_webactionenabledchanged, action, webAction))
+        action.changed.connect(
+            partial(self._emit_webactionenabledchanged, action, webAction))
 
     def is_web_action_enabled(self, webAction):
         return self.page().action(webAction).isEnabled()
@@ -164,24 +183,24 @@ class WebView(QWebEngineView):
 
         return None
 
-    @Slot()
-    def _emit_devtools_requested(self):
-        self.dev_tools_requested.emit(self.page())
-
-    def contextMenuEvent(self, event):
+    def create_context_menu(self) -> QMenu:
+        # ensure the context menu keeps a reference at time of call, for pyqt6
         menu = self.createStandardContextMenu()
         actions = menu.actions()
-        inspect_action = self.page().action(QWebEnginePage.InspectElement)
+        inspect_action = self.page().action(QWebEnginePage.WebAction.InspectElement)
         if inspect_action in actions:
             inspect_action.setText("Inspect element")
         else:
-            vs = self.page().action(QWebEnginePage.ViewSource)
+            vs = self.page().action(QWebEnginePage.WebAction.ViewSource)
             if vs not in actions:
                 menu.addSeparator()
-
             action = menu.addAction("Open inspector in new window")
             action.triggered.connect(self._emit_devtools_requested)
+        self._context_menu = menu
+        return menu
 
+    def contextMenuEvent(self, event: QContextMenuEvent):
+        menu = self.create_context_menu()
         menu.popup(event.globalPos())
 
     def handle_certificate_error(self, error):
@@ -211,7 +230,8 @@ class WebView(QWebEngineView):
         password_dialog.setupUi(dialog)
 
         password_dialog.m_iconLabel.setText("")
-        icon = QIcon(w.style().standardIcon(QStyle.SP_MessageBoxQuestion, 0, w))
+        icon = QIcon(w.style().standardIcon(
+            QStyle.SP_MessageBoxQuestion, 0, w))
         password_dialog.m_iconLabel.setPixmap(icon.pixmap(32, 32))
 
         url_str = requestUrl.toString().toHtmlEscaped()
@@ -250,11 +270,13 @@ class WebView(QWebEngineView):
 
         password_dialog.m_iconLabel.setText("")
 
-        icon = QIcon(w.style().standardIcon(QStyle.SP_MessageBoxQuestion, 0, w))
+        icon = QIcon(w.style().standardIcon(
+            QStyle.SP_MessageBoxQuestion, 0, w))
         password_dialog.m_iconLabel.setPixmap(icon.pixmap(32, 32))
 
         proxy = proxyHost.toHtmlEscaped()
-        password_dialog.m_infoLabel.setText(f'Connect to proxy "{proxy}" using:')
+        password_dialog.m_infoLabel.setText(
+            f'Connect to proxy "{proxy}" using:')
         password_dialog.m_infoLabel.setWordWrap(True)
 
         if dialog.exec() == QDialog.Accepted:
