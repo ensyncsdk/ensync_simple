@@ -35,11 +35,9 @@ dev = [
     "ensync-simple[pyqt6]",
 ]
 
-
 [tool.setuptools.packages.find]
 where = ["src"]
-include = ["ensync", "simplebrowser"]
-
+include = ["ensync"]
 
 [build-system]
 requires = ["setuptools>=61", "wheel"]
