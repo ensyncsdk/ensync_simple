@@ -5,6 +5,7 @@
 
 import sys
 from argparse import ArgumentParser, RawTextHelpFormatter
+import traceback
 
 from qtpy.QtWebEngineCore import QWebEngineProfile, QWebEngineSettings
 from qtpy.QtWidgets import QApplication, QErrorMessage
@@ -44,8 +45,10 @@ if __name__ == "__main__":
     # url = QUrl.fromUserInput(args.url) if args.url else QUrl("https://www.qt.io")
     # window.tab_widget().set_url(url)
     window.show()
+    rc = 0
     try:
         rc = app.exec()
     except BaseException:
-        raise
+        rc = 1
+        traceback.print_exception(*sys.exc_info())
     sys.exit(rc)
