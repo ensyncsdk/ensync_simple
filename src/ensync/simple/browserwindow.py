@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
 import sys
+from warnings import warn
 
 import typing as t
 
@@ -13,6 +14,7 @@ from qtpy.QtWidgets import (QMainWindow, QFileDialog,
 from qtpy.QtGui import QAction, QGuiApplication, QIcon, QKeySequence
 from qtpy.QtCore import QUrl, Qt, Slot, Signal
 
+from ensync.simple.util import SimpleWarning
 from ensync.simple.tabwidget import TabWidget
 
 
@@ -413,7 +415,7 @@ class BrowserWindow(QMainWindow):
         elif action == QWebEnginePage.WebAction.Stop:
             self._stop_action.setEnabled(enabled)
         else:
-            print("Unhandled webActionChanged signal", file=sys.stderr)
+            warn(SimpleWarning("Unhandled webActionChanged signal", action, enabled), stacklevel=2)
 
     def handle_web_view_title_changed(self, title):
         off_the_record = self._profile.isOffTheRecord()
