@@ -90,15 +90,15 @@ class BaseBrowserWindow(QMainWindow):
     def _find_previous(self):
         tab = self.current_tab()
         if tab and self._last_search:
-            tab.findText(self._last_search, QWebEnginePage.FindBackward)
+            tab.findText(self._last_search, QWebEnginePage.FindFlag.FindBackward)
 
     @Slot()
     def _stop(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Stop)
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.WebAction.Stop)
 
     @Slot()
     def _reload(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Reload)
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.WebAction.Reload)
 
     @Slot()
     def _stop_reload(self):
@@ -107,11 +107,11 @@ class BaseBrowserWindow(QMainWindow):
 
     @Slot()
     def _back(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Back)
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.WebAction.Back)
 
     @Slot()
     def _forward(self):
-        self._tab_widget.trigger_web_page_action(QWebEnginePage.Forward)
+        self._tab_widget.trigger_web_page_action(QWebEnginePage.WebAction.Forward)
 
     @Slot()
     def _zoom_in(self):

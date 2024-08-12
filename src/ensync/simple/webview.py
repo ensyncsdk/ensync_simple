@@ -21,21 +21,21 @@ from ensync.simple.ui_certificateerrordialog import Ui_CertificateErrorDialog
 
 
 def question_for_feature(feature):
-    if feature == QWebEnginePage.Geolocation:
+    if feature == QWebEnginePage.Feature.Geolocation:
         return "Allow %1 to access your location information?"
-    if feature == QWebEnginePage.MediaAudioCapture:
+    if feature == QWebEnginePage.Feature.MediaAudioCapture:
         return "Allow %1 to access your microphone?"
-    if feature == QWebEnginePage.MediaVideoCapture:
+    if feature == QWebEnginePage.Feature.MediaVideoCapture:
         return "Allow %1 to access your webcam?"
-    if feature == QWebEnginePage.MediaAudioVideoCapture:
+    if feature == QWebEnginePage.Feature.MediaAudioVideoCapture:
         return "Allow %1 to access your microphone and webcam?"
-    if feature == QWebEnginePage.MouseLock:
+    if feature == QWebEnginePage.Feature.MouseLock:
         return "Allow %1 to lock your mouse cursor?"
-    if feature == QWebEnginePage.DesktopVideoCapture:
+    if feature == QWebEnginePage.Feature.DesktopVideoCapture:
         return "Allow %1 to capture video of your desktop?"
-    if feature == QWebEnginePage.DesktopAudioVideoCapture:
+    if feature == QWebEnginePage.Feature.DesktopAudioVideoCapture:
         return "Allow %1 to capture audio and video of your desktop?"
-    if feature == QWebEnginePage.Notifications:
+    if feature == QWebEnginePage.Feature.Notifications:
         return "Allow %1 to show notification on your desktop?"
     return ""
 
@@ -255,10 +255,10 @@ class WebView(QWebEngineView):
         page = self.page()
         if question and QMessageBox.question(w, title, question) == QMessageBox.Yes:
             page.setFeaturePermission(securityOrigin, feature,
-                                      QWebEnginePage.PermissionGrantedByUser)
+                                      QWebEnginePage.PermissionPolicy.PermissionGrantedByUser)
         else:
             page.setFeaturePermission(securityOrigin, feature,
-                                      QWebEnginePage.PermissionDeniedByUser)
+                                      QWebEnginePage.PermissionPolicy.PermissionDeniedByUser)
 
     def handle_proxy_authentication_required(self, url, auth, proxyHost):
         w = self.window()
