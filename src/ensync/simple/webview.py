@@ -166,16 +166,16 @@ class WebView(QWebEngineView):
         if not main_window:
             return None
 
-        if type == QWebEnginePage.WebBrowserTab:
+        if type == QWebEnginePage.WebWindowType.WebBrowserTab:
             return main_window.tab_widget().create_tab()
 
-        if type == QWebEnginePage.WebBrowserBackgroundTab:
+        if type == QWebEnginePage.WebWindowType.WebBrowserBackgroundTab:
             return main_window.tab_widget().create_background_tab()
 
-        if type == QWebEnginePage.WebBrowserWindow:
+        if type == QWebEnginePage.WebWindowType.WebBrowserWindow:
             return main_window.browser().createWindow().current_tab()
 
-        if type == QWebEnginePage.WebDialog:
+        if type == QWebEnginePage.WebWindowType.WebDialog:
             view = WebView()
             WebPopupWindow(view, self.page().profile(), self.window())
             view.dev_tools_requested.connect(self.dev_tools_requested)
