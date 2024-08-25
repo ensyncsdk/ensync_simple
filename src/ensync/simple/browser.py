@@ -10,7 +10,7 @@ from qtpy.QtWebEngineCore import (
     qWebEngineChromiumVersion, QWebEngineProfile, QWebEngineSettings
     )
 from qtpy.QtCore import (
-    QObject, Qt, Slot, QCoreApplication
+    QObject, Qt, Slot, QCoreApplication, QUrl
 )
 
 from ensync.simple.downloadmanagerwidget import DownloadManagerWidget

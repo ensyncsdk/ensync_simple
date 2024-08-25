@@ -1,29 +1,32 @@
 # Copyright (C) 2023 The Qt Company Ltd.
 # SPDX-License-Identifier: LicenseRef-Qt-Commercial OR BSD-3-Clause
 
+from aenum import StrEnum
 from warnings import warn
 
 import typing as t
 
-from qtpy.QtWebEngineCore import QWebEnginePage
+from qtpy.QtCore import QObject, QUrl, Qt, Slot, Signal, QByteArray
+from qtpy.QtGui import QAction, QGuiApplication, QIcon, QKeySequence
 from qtpy.QtWidgets import (QMainWindow, QFileDialog,
                             QInputDialog, QLineEdit, QMenu, QMessageBox,
                             QProgressBar, QToolBar, QVBoxLayout, QWidget,
                             QApplication)
-from qtpy.QtGui import QAction, QGuiApplication, QIcon, QKeySequence
-from qtpy.QtCore import QObject, QUrl, Qt, Slot, Signal
-
-from qtpy.QtWebEngineCore import (
-    QWebEngineProfile
-)
+from qtpy.QtWebEngineCore import QWebEnginePage, QWebEngineProfile
 
 from ensync.simple.util import SimpleWarning
 from ensync.simple.tabwidget import TabWidget
+from ensync.simple.webview import WebView
 
 if t.TYPE_CHECKING:
     from ensync.simple.browser import Browser
 else:
     Browser: t.TypeAlias = QObject
+
+
+class Const(StrEnum):
+    EMPTY = ""
+    TEXT_HTML = "text/html"
 
 
 def remove_backspace(keys):
@@ -185,7 +188,7 @@ class BaseBrowserWindow(QMainWindow):
     def tab_widget(self):
         return self._tab_widget
 
-    def current_tab(self):
+    def current_tab(self) -> WebView:
         return self._tab_widget.current_web_view()
 
     def handle_show_window_triggered(self):
@@ -343,6 +346,31 @@ class BrowserWindow(BaseBrowserWindow):
         tab = self.current_tab()
         if tab:
             tab.dev_tools_requested.emit(tab.page())
+
+    def load_url_new_tab(self, url: t.Union[str, QUrl], background: t.Optional[bool] = False) -> WebView:
+        if background:
+            tab = self._tab_widget.create_background_tab()
+        else:
+            tab = self._tab_widget.create_tab()
+        qurl = url if isinstance(url, QUrl) else QUrl(url)
+        tab.page().setUrl(qurl)
+        return tab
+
+    def load_content_new_tab(self, data: t.Union[str, QByteArray, bytes, bytearray, memoryview],
+                             mime_type: t.Optional[str] = Const.TEXT_HTML,
+                             base_url: t.Union[str, QUrl] = Const.EMPTY,
+                             background: t.Optional[bool] = False):
+        if background:
+            tab = self._tab_widget.create_background_tab()
+        else:
+            tab = self._tab_widget.create_tab()
+
+        if isinstance(data, str):
+            content_bytes = data.encode()
+        else:
+            content_bytes = data
+
+        tab.page().setContent(content_bytes, mime_type, base_url)
 
     def create_file_menu(self, tabWidget):
         file_menu = QMenu("File")

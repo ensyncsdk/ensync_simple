@@ -39,15 +39,18 @@ def run_main():
                             formatter_class=RawTextHelpFormatter)
     parser.add_argument("--single-process", "-s", action="store_true",
                         help="Run in single process mode (trouble shooting)")
-    parser.add_argument("url", type=str, nargs="?", help="URL")
-    args = parser.parse_args()
+    parser.add_argument("url", type=str, nargs="*", help="URL")
+    ns, rest_args = parser.parse_known_args()
 
     QCoreApplication.setOrganizationName("ensync")
     QCoreApplication.setApplicationName("simple")
 
-    app_args = sys.argv
-    if args.single_process:
+    app_args = [sys.argv[0]]
+    if ns.single_process:
         app_args.extend(["--webEngineArgs", "--single-process"])
+    if rest_args:
+        app_args.extend(rest_args)
+
     app = QApplication(app_args)
     app.setWindowIcon(QIcon(":AppLogoColor.png"))
     QLoggingCategory.setFilterRules("qt.webenginecontext.debug=true")
@@ -60,8 +63,18 @@ def run_main():
     browser = Browser()
     window = browser.create_hidden_window()
 
-    # url = QUrl.fromUserInput(args.url) if args.url else QUrl("https://www.qt.io")
-    # window.tab_widget().set_url(url)
+    arg_urls = ns.url
+    if arg_urls:
+        content = None
+        window.current_tab().deleteLater()
+        for url in arg_urls:
+            if url == "-":
+                if content is None:
+                    content = sys.stdin.read()
+                    window.load_content_new_tab(content, base_url="about:", background=True)
+            else:
+                window.load_url_new_tab(url, True)
+
     window.show()
     rc = 0
     try:

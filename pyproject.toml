@@ -15,6 +15,7 @@ readme = "README.md"
 license = { text = "MIT" }
 
 dependencies = [
+    "aenum",
     "qtpy"
 ]
 

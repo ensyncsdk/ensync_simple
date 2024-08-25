@@ -100,10 +100,10 @@ class TabWidget(QTabWidget):
         menu.addAction("Reload All Tabs", self.reload_all_tabs)
         menu.exec(QCursor.pos())
 
-    def current_web_view(self):
+    def current_web_view(self) -> WebView:
         return self.web_view(self.currentIndex())
 
-    def web_view(self, index):
+    def web_view(self, index: int) -> WebView:
         return self.widget(index)
 
     def _title_changed(self, web_view, title):
@@ -167,12 +167,12 @@ class TabWidget(QTabWidget):
         web_page.findTextFinished.connect(partial(self._find_text_finished,
                                                   webView))
 
-    def create_tab(self):
+    def create_tab(self) -> WebView:
         web_view = self.create_background_tab()
         self.setCurrentWidget(web_view)
         return web_view
 
-    def create_background_tab(self):
+    def create_background_tab(self) -> WebView:
         web_view = WebView()
         web_page = WebPage(self._profile, web_view)
         web_view.set_page(web_page)
